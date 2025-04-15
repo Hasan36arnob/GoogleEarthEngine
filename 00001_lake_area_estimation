@@ -1,56 +1,58 @@
-
-/*
-Tutorial Code by Amirhossein Ahrari
-YouTube: https://www.youtube.com/@amirhosseinahrarigee
-
-This code is part of a tutorial series on Earth Engine programming techniques
-presented on the Amirhossein Ahrari YouTube channel. You are free to use and modify
-this code for academic and non-academic purposes. Don't forget to subscribe to
-the Amirhossein Ahrari channel and follow the videos to support the instructor!
-*/
-
+// আমাদের গবেষণার অঞ্চলের সীমানা নির্ধারণ করা হচ্ছে। এটি একটি বহুভুজ (Polygon) যা ভৌগলিক স্থান প্রদর্শন করে।
 var coordinates = [
-  [42.000552219688586, 38.18969302118053],
-  [43.868228000938586, 38.18969302118053],
-  [43.868228000938586, 39.209978258633186],
-  [42.000552219688586, 39.209978258633186],
-  [42.000552219688586, 38.18969302118053]
-];
-
-var roi = ee.Geometry.Polygon(coordinates);
-
-Map.addLayer(roi)
-
-var time_start = '2013', time_end = '2021'
-
-var landsat = imageCollection
-.filterDate(time_start, time_end)
-.filter(ee.Filter.lt('CLOUD_COVER', 10))
-.filter(ee.Filter.calendarRange(6,9,'month'))
-.filterBounds(geometry).map(function(img){
-  var bands = img.select('SR_.*').multiply(2.75e-05).add(-0.2);
-  var ndwi = bands.normalizedDifference(['SR_B3','SR_B5']).rename('ndwi');
-  return ndwi
-  .copyProperties(img, img.propertyNames())
-  }).median();
-
-
-Map.addLayer(landsat.clip(geometry), [], 'ndwi_summer', false);
-Map.addLayer(landsat.clip(geometry).gt(0), [], 'ndwi_thr', false);
-
-var thr = landsat.gt(0.1);
-var mask = thr.updateMask(thr);
-
-Map.addLayer(mask, [], 'ndwi_masked', false);
-
-
-var pixel_area = mask.multiply(ee.Image.pixelArea().divide(1e6));
-
-Map.addLayer(pixel_area.clip(geometry), [], 'ndwi_pixel_area', false);
-
-var lake_area = pixel_area.reduceRegion({
-  reducer: ee.Reducer.sum(), geometry: geometry, scale: 100
+    [42.000552219688586, 38.18969302118053],
+    [43.868228000938586, 38.18969302118053],
+    [43.868228000938586, 39.209978258633186],
+    [42.000552219688586, 39.209978258633186],
+    [42.000552219688586, 38.18969302118053]
+  ];
+  
+  // উপরের স্থানাঙ্কগুলি ব্যবহার করে একটি বহুভুজ (ROI - Region of Interest) তৈরি করা হচ্ছে।
+  var roi = ee.Geometry.Polygon(coordinates);
+  
+  // মানচিত্রে আমাদের গবেষণার অঞ্চলটি যোগ করে দেখানো হচ্ছে।
+  Map.addLayer(roi);
+  
+  // সময়সীমা নির্ধারণ করা হচ্ছে (2013 থেকে 2021 পর্যন্ত)।
+  var time_start = '2013', time_end = '2021';
+  
+  // Landsat উপগ্রহের ছবিগুলি লোড করা হচ্ছে এবং প্রসেস করা হচ্ছে।
+  var landsat = imageCollection
+      .filterDate(time_start, time_end)  // শুধুমাত্র 2013 থেকে 2021 পর্যন্ত ছবি নেওয়া হচ্ছে।
+      .filter(ee.Filter.lt('CLOUD_COVER', 10))  // মেঘ আচ্ছাদিত ছবি বাদ দেওয়া হচ্ছে (>10% মেঘ থাকলে বাদ)।
+      .filter(ee.Filter.calendarRange(6, 9, 'month'))  // শুধুমাত্র গ্রীষ্মকালীন মাস (জুন-সেপ্টেম্বর) এর ছবি নেওয়া হচ্ছে।
+      .filterBounds(geometry)  // শুধুমাত্র আমাদের গবেষণার অঞ্চলের মধ্যে ছবি নেওয়া হচ্ছে।
+      .map(function(img){
+          // প্রতিটি ছবির জন্য:
+          // a) পিক্সেলের মানগুলি সঠিক স্কেলে সামঞ্জস্য করা হচ্ছে।
+          var bands = img.select('SR_.*').multiply(2.75e-05).add(-0.2);
+          // b) NDWI (নর্মালাইজড ডিফারেন্স ওয়াটার ইনডেক্স) গণনা করা হচ্ছে (B3 এবং B5 হলো সবুজ এবং NIR ব্যান্ড)।
+          var ndwi = bands.normalizedDifference(['SR_B3', 'SR_B5']).rename('ndwi');
+          return ndwi;
+      }).median();  // সমস্ত ছবির মধ্যে থেকে মিডিয়ান (মধ্যম মান) নেওয়া হচ্ছে।
+  
+  // মানচিত্রে NDWI মান দেখানো হচ্ছে।
+  Map.addLayer(landsat.clip(geometry), [], 'ndwi_summer', false);
+  
+  // জলের সহজ মাস্ক (NDWI > 0) তৈরি করা হচ্ছে।
+  Map.addLayer(landsat.clip(geometry).gt(0), [], 'ndwi_thr', false);
+  
+  // আরও ভালো জলের মাস্ক তৈরি করা হচ্ছে (NDWI > 0.1)।
+  var thr = landsat.gt(0.1);
+  var mask = thr.updateMask(thr);  // জল ছাড়া অন্য অংশ লুকানো হচ্ছে।
+  Map.addLayer(mask, [], 'ndwi_masked', false);
+  
+  // জলের আয়তন গণনা করা হচ্ছে।
+  // প্রতিটি জলের পিক্সেলের আয়তন বের করা হচ্ছে (বর্গ কিলোমিটারে)।
+  var pixel_area = mask.multiply(ee.Image.pixelArea().divide(1e6));
+  Map.addLayer(pixel_area.clip(geometry), [], 'ndwi_pixel_area', false);
+  
+  // আমাদের অঞ্চলের সমস্ত জলের পিক্সেলের আয়তন যোগ করা হচ্ছে।
+  var lake_area = pixel_area.reduceRegion({
+      reducer: ee.Reducer.sum(), 
+      geometry: geometry, 
+      scale: 100  // 100 মিটার রেজোলিউশন
   }).values().get(0);
   
-  
-print(ee.Number(lake_area))
+  // মোট জলের আয়তন প্রিন্ট করা হচ্ছে (বর্গ কিলোমিটারে)।
+  print(ee.Number(lake_area));
